@@ -72,14 +72,16 @@ make_split_violin <- function(df, value, group, levels, title, ylab, path, color
   d$plot_group <- factor(d[[group]], levels = levels)
   d$comparison <- factor(paste(levels, collapse = " vs "))
   d$side <- ifelse(d$plot_group == levels[[1]], 1L, 2L)
+  group_counts <- table(d$plot_group)
+  legend_labels <- paste0(levels, " (n=", as.integer(group_counts[levels]), ")")
   pvalue <- wilcox.test(d[[value]] ~ d$plot_group, exact = FALSE)$p.value
   ymax <- max(d[[value]], na.rm = TRUE)
   yrange <- diff(range(d[[value]], na.rm = TRUE))
   p <- ggplot(d, aes(comparison, .data[[value]], fill = plot_group, group = side)) + geom_split_violin(trim = FALSE, scale = "width",
     color = "black", linewidth = 0.25) + geom_boxplot(width = 0.12, outlier.shape = NA, alpha = 0.35, color = "black") +
     annotate("text", x = 1, y = ymax + max(0.08 * yrange, 0.03), label = paste0("p = ", format_p(pvalue)), size = 3.4) +
-    scale_fill_manual(values = setNames(colors, levels)) + scale_y_continuous(expand = expansion(mult = c(0.03, 0.17))) +
-    theme_classic(base_size = 11) + labs(title = title, x = NULL, y = ylab, fill = NULL)
+    scale_fill_manual(values = setNames(colors, levels), labels = legend_labels) + scale_y_continuous(expand = expansion(mult = c(0.03,
+      0.17))) + theme_classic(base_size = 11) + labs(title = title, x = NULL, y = ylab, fill = NULL)
   save_pdf(p, path, 7.5, 5.5)
   data.frame(group_1 = levels[[1]], n_1 = sum(d$plot_group == levels[[1]]), group_2 = levels[[2]], n_2 = sum(d$plot_group ==
     levels[[2]]), wilcox_p = pvalue)
@@ -153,17 +155,20 @@ meta$PLAUR_ALRA <- GetAssayData(obj, assay = "alra", layer = "data")["PLAUR", ]
 
 populations <- list(LMPP_MPP = "LMPP|MPP", Monocytes = "Monocyte", HSC = "HSC", GMP = "GMP")
 
+figure_files <- list(LMPP_MPP = c("Figure_4K_LMPP_MPP_PLAUR_age.pdf", "Figure_4L_LMPP_MPP_inflammation_PLAUR_status.pdf"),
+  Monocytes = c("Figure_4M_monocyte_PLAUR_age.pdf", "Figure_4N_monocyte_inflammation_PLAUR_status.pdf"), HSC = c("Figure_S5T_HSC_PLAUR_age.pdf",
+    "Figure_S5U_HSC_inflammation_PLAUR_status.pdf"), GMP = c("Figure_S5V_GMP_PLAUR_age.pdf", "Figure_S5W_GMP_inflammation_PLAUR_status.pdf"))
+
 # Manuscript figures and cell-level Wilcoxon tests
 stats <- list()
 
 for (nm in names(populations)) {
   d <- meta %>% filter(!is.na(age_plot), grepl(populations[[nm]], population_plot, ignore.case = TRUE))
   stats[[paste0(nm, "_age")]] <- make_split_violin(d, "PLAUR_ALRA", "age_plot", c("Young", "Elderly"), paste("ALRA-imputed PLAUR in",
-    nm), "ALRA-imputed PLAUR expression", file.path(outdir, paste0(nm, "_PLAUR_young_elderly.pdf")))
+    nm), "ALRA-imputed PLAUR expression", file.path(outdir, figure_files[[nm]][[1]]))
   old <- d %>% filter(age_plot == "Elderly")
   stats[[paste0(nm, "_status")]] <- make_split_violin(old, "Hallmark_Inflammatory_Response1", "PLAUR_status", c("PLAUR-",
-    "PLAUR+"), paste("Hallmark inflammatory response in elderly", nm), "Seurat module score", file.path(outdir, paste0(nm,
-    "_hallmark_inflammation_PLAUR_status.pdf")))
+    "PLAUR+"), paste("Hallmark inflammatory response in elderly", nm), "Seurat module score", file.path(outdir, figure_files[[nm]][[2]]))
 }
 
 write_csv(bind_rows(stats, .id = "panel"), file.path(outdir, "Ainciburu_statistics.csv"))

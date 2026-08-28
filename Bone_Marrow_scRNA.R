@@ -93,14 +93,16 @@ make_split_violin <- function(df, value, group, levels, title, ylab, path, color
   d$plot_group <- factor(d[[group]], levels = levels)
   d$comparison <- factor(paste(levels, collapse = " vs "))
   d$side <- ifelse(d$plot_group == levels[[1]], 1L, 2L)
+  group_counts <- table(d$plot_group)
+  legend_labels <- paste0(levels, " (n=", as.integer(group_counts[levels]), ")")
   pvalue <- wilcox.test(d[[value]] ~ d$plot_group, exact = FALSE)$p.value
   ymax <- max(d[[value]], na.rm = TRUE)
   yrange <- diff(range(d[[value]], na.rm = TRUE))
   p <- ggplot(d, aes(comparison, .data[[value]], fill = plot_group, group = side)) + geom_split_violin(trim = FALSE, scale = "width",
     color = "black", linewidth = 0.25) + geom_boxplot(width = 0.12, outlier.shape = NA, alpha = 0.35, color = "black") +
     annotate("text", x = 1, y = ymax + max(0.08 * yrange, 0.03), label = paste0("p = ", format_p(pvalue)), size = 3.4) +
-    scale_fill_manual(values = setNames(colors, levels)) + scale_y_continuous(expand = expansion(mult = c(0.03, 0.17))) +
-    theme_classic(base_size = 11) + labs(title = title, x = NULL, y = ylab, fill = NULL)
+    scale_fill_manual(values = setNames(colors, levels), labels = legend_labels) + scale_y_continuous(expand = expansion(mult = c(0.03,
+      0.17))) + theme_classic(base_size = 11) + labs(title = title, x = NULL, y = ylab, fill = NULL)
   save_pdf(p, path, 7.5, 5.5)
   data.frame(group_1 = levels[[1]], n_1 = sum(d$plot_group == levels[[1]]), group_2 = levels[[2]], n_2 = sum(d$plot_group ==
     levels[[2]]), wilcox_p = pvalue)
@@ -217,7 +219,53 @@ obj <- obj
 p <- DimPlot(obj, reduction = "umap", group.by = "cell_type", label = TRUE, repel = TRUE, raster = FALSE, pt.size = 0.12) +
   ggtitle("Progenitor-enriched bone marrow") + theme_classic(base_size = 11)
 
-save_pdf(p, file.path(outdir, "cell_type_umap.pdf"), 11, 8)
+save_pdf(p, file.path(outdir, "Figure_S3K_cell_type_umap.pdf"), 11, 8)
+
+d <- obj@meta.data %>% transmute(cell_type = as.character(.data[["cell_type"]]), group = factor(.data[["analysis_group"]],
+  levels = c("Y UT", "O UT"))) %>% filter(!is.na(group), !is.na(cell_type), nzchar(cell_type)) %>% count(cell_type, group,
+  name = "n_cells") %>% complete(cell_type, group, fill = list(n_cells = 0)) %>% group_by(group) %>% mutate(fraction_within_group = n_cells / sum(n_cells)) %>%
+  ungroup() %>% group_by(cell_type) %>% mutate(fraction_within_cell_type = fraction_within_group / sum(fraction_within_group)) %>%
+  ungroup() %>% mutate(cell_type = factor(cell_type, levels = sort(unique(cell_type))))
+
+p1 <- ggplot(d, aes(cell_type, fraction_within_group, fill = group)) + geom_col(position = position_dodge(width = 0.82),
+  width = 0.72, color = "black", linewidth = 0.2) + scale_fill_manual(values = c(`Y UT` = "#7CA1CC", `O UT` = "#08306B"),
+  drop = FALSE) + scale_y_continuous(labels = scales::percent_format(accuracy = 1), expand = expansion(mult = c(0, 0.03))) +
+  theme_classic(base_size = 11) + theme(axis.text.x = element_text(angle = 45, hjust = 1), legend.position = "top") + labs(x = NULL,
+    y = "Fraction of all cells in group", fill = NULL)
+
+p2 <- ggplot(d, aes(cell_type, fraction_within_cell_type, fill = group)) + geom_col(width = 0.75, color = "black", linewidth = 0.25) +
+  scale_fill_manual(values = c(`Y UT` = "#7CA1CC", `O UT` = "#08306B"), drop = FALSE) + scale_y_continuous(labels = scales::percent_format(accuracy = 1),
+    limits = c(0, 1), expand = expansion(mult = c(0, 0.03))) + theme_classic(base_size = 11) + theme(axis.text.x = element_text(angle = 45,
+    hjust = 1), legend.position = "top") + labs(x = NULL, y = "Fraction within cell type", fill = NULL)
+
+save_pdf(p1, file.path(outdir, paste0("Figure_S3L_YoungUT_vs_OldUT", "_fraction_within_group.pdf")), 12, 6)
+
+save_pdf(p2, file.path(outdir, paste0("Figure_S3L_YoungUT_vs_OldUT", "_fraction_within_cell_type.pdf")), 12, 6)
+
+write_csv(d, file.path(outdir, paste0("Figure_S3L_YoungUT_vs_OldUT", "_cell_counts_and_fractions.csv")))
+
+d <- obj@meta.data %>% transmute(cell_type = as.character(.data[["cell_type"]]), group = factor(.data[["analysis_group"]],
+  levels = c("O UT", "O uPAR"))) %>% filter(!is.na(group), !is.na(cell_type), nzchar(cell_type)) %>% count(cell_type, group,
+  name = "n_cells") %>% complete(cell_type, group, fill = list(n_cells = 0)) %>% group_by(group) %>% mutate(fraction_within_group = n_cells / sum(n_cells)) %>%
+  ungroup() %>% group_by(cell_type) %>% mutate(fraction_within_cell_type = fraction_within_group / sum(fraction_within_group)) %>%
+  ungroup() %>% mutate(cell_type = factor(cell_type, levels = sort(unique(cell_type))))
+
+p1 <- ggplot(d, aes(cell_type, fraction_within_group, fill = group)) + geom_col(position = position_dodge(width = 0.82),
+  width = 0.72, color = "black", linewidth = 0.2) + scale_fill_manual(values = c(`O UT` = "#08306B", `O uPAR` = "#FF4902"),
+  drop = FALSE) + scale_y_continuous(labels = scales::percent_format(accuracy = 1), expand = expansion(mult = c(0, 0.03))) +
+  theme_classic(base_size = 11) + theme(axis.text.x = element_text(angle = 45, hjust = 1), legend.position = "top") + labs(x = NULL,
+    y = "Fraction of all cells in group", fill = NULL)
+
+p2 <- ggplot(d, aes(cell_type, fraction_within_cell_type, fill = group)) + geom_col(width = 0.75, color = "black", linewidth = 0.25) +
+  scale_fill_manual(values = c(`O UT` = "#08306B", `O uPAR` = "#FF4902"), drop = FALSE) + scale_y_continuous(labels = scales::percent_format(accuracy = 1),
+    limits = c(0, 1), expand = expansion(mult = c(0, 0.03))) + theme_classic(base_size = 11) + theme(axis.text.x = element_text(angle = 45,
+    hjust = 1), legend.position = "top") + labs(x = NULL, y = "Fraction within cell type", fill = NULL)
+
+save_pdf(p1, file.path(outdir, paste0("Figure_S3M_OldUT_vs_OlduPAR", "_fraction_within_group.pdf")), 12, 6)
+
+save_pdf(p2, file.path(outdir, paste0("Figure_S3M_OldUT_vs_OlduPAR", "_fraction_within_cell_type.pdf")), 12, 6)
+
+write_csv(d, file.path(outdir, paste0("Figure_S3M_OldUT_vs_OlduPAR", "_cell_counts_and_fractions.csv")))
 
 monocytes <- obj@meta.data %>% mutate(cell = rownames(.)) %>% filter(grepl("Monocyte", cell_type, ignore.case = TRUE))
 
@@ -262,9 +310,9 @@ filtered$direction <- ifelse(filtered[[fc]] > 0, "UP", "DOWN")
 
 dir.create(file.path(outdir, "DEG"), recursive = TRUE, showWarnings = FALSE)
 
-write_csv(deg, file.path(file.path(outdir, "DEG"), paste0("Old_uPAR_vs_Old_UT", "_all_genes.csv")))
+write_csv(deg, file.path(file.path(outdir, "DEG"), paste0("Figure_3J_OlduPAR_vs_OldUT", "_all_genes.csv")))
 
-write_csv(filtered, file.path(file.path(outdir, "DEG"), paste0("Old_uPAR_vs_Old_UT", "_filtered_for_enrichr.csv")))
+write_csv(filtered, file.path(file.path(outdir, "DEG"), paste0("Figure_3J_OlduPAR_vs_OldUT", "_filtered_for_enrichr.csv")))
 
 # Differential expression and Enrichr analysis
 deg <- filtered
@@ -283,8 +331,101 @@ for (direction in c("UP", "DOWN")) {
   for (db in names(er)) results[[paste(direction, db, sep = "_")]] <- er[[db]]
 }
 
-if (length(results)) write.xlsx(results, file.path(file.path(outdir, "DEG"), paste0("Old_uPAR_vs_Old_UT", "_enrichr.xlsx")),
-  overwrite = TRUE)
+if (length(results)) {
+  write.xlsx(results, file.path(file.path(outdir, "DEG"), paste0("Figure_3J_OlduPAR_vs_OldUT", "_enrichr.xlsx")), overwrite = TRUE)
+  plot_data <- bind_rows(lapply(names(results), function(sheet) {
+    x <- results[[sheet]]
+    if (!nrow(x))
+      return(data.frame())
+    pieces <- strsplit(sheet, "_", fixed = TRUE)[[1]]
+    direction <- pieces[[1]]
+    database <- sub(paste0("^", direction, "_"), "", sheet)
+    x %>% transmute(direction = direction, database = database, term = as.character(Term), p_value = as.numeric(P.value),
+      odds_ratio = as.numeric(Odds.Ratio), combined_score = as.numeric(Combined.Score))
+  })) %>% filter(is.finite(p_value), p_value > 0, is.finite(odds_ratio), odds_ratio > 0, is.finite(combined_score), combined_score >
+    0) %>% group_by(direction) %>% arrange(p_value, desc(odds_ratio), .by_group = TRUE) %>% distinct(term, .keep_all = TRUE) %>%
+    slice_head(n = 10) %>% ungroup() %>% mutate(term_plot = stringr::str_wrap(term, 42)) %>% arrange(direction, odds_ratio) %>%
+    mutate(term_plot = factor(term_plot, levels = unique(term_plot)))
+  if (nrow(plot_data)) {
+    p <- ggplot(plot_data, aes(odds_ratio, term_plot)) + geom_segment(aes(x = 1, xend = odds_ratio, yend = term_plot),
+      color = "#AAB4C3", linewidth = 0.5) + geom_point(aes(color = p_value, size = combined_score)) + scale_x_log10() +
+      scale_color_gradient(low = "#B2182B", high = "#2166AC", trans = "log10") + scale_size_continuous(trans = "log10",
+        range = c(3, 9)) + facet_grid(direction ~ ., scales = "free_y", space = "free_y") + theme_classic(base_size = 11) +
+      theme(axis.text.y = element_text(size = 9), strip.text = element_text(face = "bold")) + labs(x = "Odds ratio (log scale)",
+        y = NULL, color = "Nominal P value", size = "Combined score")
+    save_pdf(p, file.path(file.path(outdir, "DEG"), paste0("Figure_3J_OlduPAR_vs_OldUT", "_enrichr.pdf")), 10, 9)
+    write_csv(plot_data %>% mutate(term_plot = as.character(term_plot)), file.path(file.path(outdir, "DEG"), paste0("Figure_3J_OlduPAR_vs_OldUT",
+      "_enrichr_plot_data.csv")))
+  }
+}
+
+invisible(results)
+
+Idents(obj) <- factor(obj[["analysis_group", drop = TRUE]])
+
+# Differential expression and Enrichr analysis
+deg <- FindMarkers(obj, ident.1 = "O UT", ident.2 = "Y UT", assay = "RNA", test.use = "wilcox", min.pct = 0.1, logfc.threshold = 0,
+  only.pos = FALSE)
+
+deg$gene <- rownames(deg)
+
+fc <- intersect(c("avg_log2FC", "avg_logFC"), names(deg))[[1]]
+
+keep <- deg$p_val < 0.05 & abs(deg[[fc]]) > 0.5
+
+filtered <- deg[keep, , drop = FALSE]
+
+filtered$direction <- ifelse(filtered[[fc]] > 0, "UP", "DOWN")
+
+dir.create(file.path(outdir, "DEG"), recursive = TRUE, showWarnings = FALSE)
+
+write_csv(deg, file.path(file.path(outdir, "DEG"), paste0("Figure_S3N_OldUT_vs_YoungUT", "_all_genes.csv")))
+
+write_csv(filtered, file.path(file.path(outdir, "DEG"), paste0("Figure_S3N_OldUT_vs_YoungUT", "_filtered_for_enrichr.csv")))
+
+deg_age <- filtered
+
+if (!requireNamespace("enrichR", quietly = TRUE)) stop("The enrichR package is required")
+
+databases <- c("GO_Biological_Process_2025", "MSigDB_Hallmark_2020", "Reactome_2022")
+
+results <- list()
+
+for (direction in c("UP", "DOWN")) {
+  genes <- unique(deg_age$gene[deg_age$direction == direction])
+  if (!length(genes))
+    next
+  er <- enrichR::enrichr(genes, databases)
+  for (db in names(er)) results[[paste(direction, db, sep = "_")]] <- er[[db]]
+}
+
+if (length(results)) {
+  write.xlsx(results, file.path(file.path(outdir, "DEG"), paste0("Figure_S3N_OldUT_vs_YoungUT", "_enrichr.xlsx")), overwrite = TRUE)
+  plot_data <- bind_rows(lapply(names(results), function(sheet) {
+    x <- results[[sheet]]
+    if (!nrow(x))
+      return(data.frame())
+    pieces <- strsplit(sheet, "_", fixed = TRUE)[[1]]
+    direction <- pieces[[1]]
+    database <- sub(paste0("^", direction, "_"), "", sheet)
+    x %>% transmute(direction = direction, database = database, term = as.character(Term), p_value = as.numeric(P.value),
+      odds_ratio = as.numeric(Odds.Ratio), combined_score = as.numeric(Combined.Score))
+  })) %>% filter(is.finite(p_value), p_value > 0, is.finite(odds_ratio), odds_ratio > 0, is.finite(combined_score), combined_score >
+    0) %>% group_by(direction) %>% arrange(p_value, desc(odds_ratio), .by_group = TRUE) %>% distinct(term, .keep_all = TRUE) %>%
+    slice_head(n = 10) %>% ungroup() %>% mutate(term_plot = stringr::str_wrap(term, 42)) %>% arrange(direction, odds_ratio) %>%
+    mutate(term_plot = factor(term_plot, levels = unique(term_plot)))
+  if (nrow(plot_data)) {
+    p <- ggplot(plot_data, aes(odds_ratio, term_plot)) + geom_segment(aes(x = 1, xend = odds_ratio, yend = term_plot),
+      color = "#AAB4C3", linewidth = 0.5) + geom_point(aes(color = p_value, size = combined_score)) + scale_x_log10() +
+      scale_color_gradient(low = "#B2182B", high = "#2166AC", trans = "log10") + scale_size_continuous(trans = "log10",
+        range = c(3, 9)) + facet_grid(direction ~ ., scales = "free_y", space = "free_y") + theme_classic(base_size = 11) +
+      theme(axis.text.y = element_text(size = 9), strip.text = element_text(face = "bold")) + labs(x = "Odds ratio (log scale)",
+        y = NULL, color = "Nominal P value", size = "Combined score")
+    save_pdf(p, file.path(file.path(outdir, "DEG"), paste0("Figure_S3N_OldUT_vs_YoungUT", "_enrichr.pdf")), 10, 9)
+    write_csv(plot_data %>% mutate(term_plot = as.character(term_plot)), file.path(file.path(outdir, "DEG"), paste0("Figure_S3N_OldUT_vs_YoungUT",
+      "_enrichr_plot_data.csv")))
+  }
+}
 
 invisible(results)
 
